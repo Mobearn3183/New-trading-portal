@@ -20,11 +20,11 @@ No schema is reset or replaced by this frontend.
 ## Operational details and verification limits
 - Virtual symbols ALPHA, NOVA and ORBIT are participant-driven, not external exchange feeds.
 - No synthetic chart data. Candles use executed trades, with up to the latest 1,000 executions returned by the API.
-- Data refreshes every 10 seconds when the tab is visible and a form control is not focused.
+- Competition members receive authenticated private WebSocket invalidations after orders, executions, positions, markets and membership changes. Data is fetched through the authorized snapshot API. A 2-second backup poll covers reconnects; a 15-second reconciliation covers missed events while connected. Form focus never pauses updates, and background updates preserve the form and drawing controls.
 - Market orders require opposing liquidity; the server cancels any unfilled remainder.
 - Order requests carry an idempotency UUID; a failed network request retains the same UUID for an identical retry in the same browser tab.
 - Daily trading windows use UTC; competition start/end inputs use the admin's local timezone and are converted to UTC.
 - Drawings are kept in memory for the currently selected market; they are not synchronized.
-- Chart indicator tests and build checks are automated. Actual signup, confirmation email delivery, authenticated trading, and mobile interactions require end-to-end validation.
+- Chart indicators, refresh queue concurrency, authenticated WebSocket protocol and channel cleanup have automated tests. Build checks are automated. Actual signup, confirmation email delivery, authenticated trading, and mobile interactions require end-to-end validation.
 - Admin roles must already be assigned by a trusted server-side administrator. The UI cannot promote itself.
 
