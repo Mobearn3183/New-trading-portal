@@ -48,7 +48,7 @@ function orderForm(){const market=(snap.markets||[]).find(s=>s.code===code);retu
 function leaderboard(){return table(['Rank','Trader','Equity','Profit','Return'],(snap.leaderboard||[]).map(l=>[e(l.rank),e(l.display_name||l.username)+(l.is_me?' (you)':''),money(l.equity),money(l.profit),e(l.return_pct)+'%']))}
 function renderTradeTable(tab){activeTab=tab;document.querySelectorAll('[data-action=tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));const target=$('#tradeTable');if(!target)return;
  if(tab==='positions')target.innerHTML=table(['Symbol','Quantity','Average','Last price','Unrealized P/L',''],(snap.positions||[]).map(p=>[e(p.code),e(p.quantity),money(p.average_price),money(p.last_price),'<span class="'+(p.pnl>=0?'positive':'negative')+'">'+money(p.pnl)+'</span>',Number(p.quantity)!==0?'<button data-action="closePosition" data-code="'+e(p.code)+'">Close at market</button>':'Closed']));
- if(tab==='orders')target.innerHTML=table(['Time','Symbol','Side','Type','Price','Quantity','Remaining','Status',''],(snap.orders||[]).map(o=>[e(date(o.created_at)),e(o.code),e(o.side),e(o.kind),money(o.price),e(o.quantity),e(o.remaining),e(o.status),['open','partial'].includes(o.status)?'<button data-action="cancel" data-id="'+e(o.id)+'">Cancel</button>':'']));
+ if(tab==='orders'){const queued=pendingOrder&&!(snap.orders||[]).some(o=>o.request_id===pendingOrder.request_id)?[{...pendingOrder,created_at:new Date().toISOString(),remaining:pendingOrder.quantity,status:'submitting'}]:[];target.innerHTML=table(['Time','Symbol','Side','Type','Price','Quantity','Remaining','Status',''],queued.concat(snap.orders||[]).map(o=>[e(date(o.created_at)),e(o.code),e(o.side),e(o.kind),money(o.price),e(o.quantity),e(o.remaining),e(o.status),['open','partial'].includes(o.status)?'<button data-action="cancel" data-id="'+e(o.id)+'">Cancel</button>':'']));}
  if(tab==='history')target.innerHTML=table(['Time','Symbol','Side','Price','Quantity'],(snap.my_trades||[]).map(t=>[e(date(t.created_at)),e(t.code),e(t.side),money(t.price),e(t.quantity)]));
  if(tab==='trades')target.innerHTML=table(['Time','Taker','Price','Quantity'],(snap.trades||[]).map(t=>[e(date(t.created_at)),e(t.taker_side),money(t.price),e(t.quantity)]));
 }
@@ -118,9 +118,9 @@ async function submitOrder(payload){
  if(pendingOrder)throw new Error('An order is already being processed.');
  const key=JSON.stringify(payload),saved=JSON.parse(sessionStorage.getItem('arena-pending-order')||'null');
  const order=saved?.key===key?saved.payload:{...payload,request_id:crypto.randomUUID()};
- pendingOrder=order;sessionStorage.setItem('arena-pending-order',JSON.stringify({key,payload:order}));
+ pendingOrder=order;activeTab='orders';renderTradeTable(activeTab);notice('Submitting order…');sessionStorage.setItem('arena-pending-order',JSON.stringify({key,payload:order}));
  try{const result=await api('order',order);sessionStorage.removeItem('arena-pending-order');activeTab='orders';await refresh(false);notice('Order '+result.status+' · remaining '+result.remaining)}
- catch(err){if(!(err instanceof TypeError)&&!['TimeoutError','AbortError'].includes(err.name))sessionStorage.removeItem('arena-pending-order');throw err}finally{pendingOrder=null;const b=$('#orderForm button');if(b)b.disabled=false}
+ catch(err){if(!(err instanceof TypeError)&&!['TimeoutError','AbortError'].includes(err.name))sessionStorage.removeItem('arena-pending-order');throw err}finally{pendingOrder=null;renderTradeTable(activeTab);const b=$('#orderForm button');if(b)b.disabled=false}
 }
 $('#app').addEventListener('submit',ev=>{ev.preventDefault();const form=ev.target,data=Object.fromEntries(new FormData(form));run(async()=>{
  if(form.id==='orderForm'){form.querySelector('button').disabled=true;try{await submitOrder({competition_id:cid,code,side:data.side,kind:data.kind,quantity:Number(data.quantity),price:data.kind==='limit'?Number(data.price):null,reduce_only:data.reduce_only==='on'})}finally{const b=$('#orderForm button');if(b)b.disabled=false}}
