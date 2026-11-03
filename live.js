@@ -27,7 +27,7 @@ export function createRealtime({url,key,getToken,onChange,onStatus,WebSocketImpl
   const fail=()=>{if(gen!==generation||socket!==ws)return;clean();status('reconnecting');retry=setTimeout(()=>connect(gen),Math.min(15000,1000*2**Math.min(failures++,4)))};
   ws.onopen=()=>{
    ws.send(JSON.stringify({topic,event:'phx_join',payload:{config:{broadcast:{ack:false,self:false},presence:{enabled:false},postgres_changes:[],private:true},access_token:token},ref:joinRef,join_ref:joinRef}));
-   joinTimeout=setTimeout(fail,10000);
+   joinTimeout=setTimeout(()=>{console.warn('Arena live subscription timed out');fail()},30000);
    heartbeat=setInterval(async()=>{
     if(lastHeartbeat){fail();return}
     lastHeartbeat=send('heartbeat',{},'phoenix');
@@ -41,12 +41,12 @@ export function createRealtime({url,key,getToken,onChange,onStatus,WebSocketImpl
    if(m.topic!==topic)return;
    if(m.event==='phx_reply'&&m.ref===joinRef){
     clearTimeout(joinTimeout);
-    if(m.payload?.status==='ok'){failures=0;status('live');onChange()}else fail();
+    if(m.payload?.status==='ok'){failures=0;status('live');onChange()}else{console.warn('Arena live subscription rejected',m.payload?.response?.reason||m.payload?.status);fail()};
    }
    if(m.event==='broadcast'&&m.payload?.event==='refresh')onChange();
    if(m.event==='phx_error'||m.event==='phx_close')fail();
   };
-  ws.onclose=fail;ws.onerror=()=>ws.close();
+  ws.onclose=ev=>{if(socket===ws)console.warn('Arena live socket closed',ev.code);fail()};ws.onerror=()=>{console.warn('Arena live transport unavailable');ws.close()};
  }
  return {
   watch(id){id=id||'';if(desired===id)return;desired=id;generation++;clean();if(id)void connect(generation);else status('idle')},
