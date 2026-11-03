@@ -1,1 +1,1 @@
-import {mkdir,copyFile} from 'node:fs/promises'; await mkdir('dist',{recursive:true}); for (const f of ['index.html','app.js','chart.js','style.css','live.js']) await copyFile(f,'dist/'+f); console.log('Built dist: five static files, no dependencies.');
+import {mkdir,copyFile} from 'node:fs/promises'; await mkdir('dist',{recursive:true}); for (const f of ['index.html','app.js','chart.js','style.css','live.js','_headers']) await copyFile(f,'dist/'+f); console.log('Built dist: six static files, no dependencies.');
