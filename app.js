@@ -11,8 +11,8 @@ let home={},snap={},cid='',code='',activeTab='positions',signup=false,busy=false
 let chartOptions={interval:60,type:'candles',ma:true,rsi:false,profile:false},drawings=[],geometry=null,startPoint=null;
 const notice=(s,error=false)=>{$('#notice').textContent=s;$('#notice').className=error?'error':''};
 function saveSession(s){if(!s)liveFeed.close();session=s; if(s)localStorage.setItem('arena-session',JSON.stringify(s));else localStorage.removeItem('arena-session')}
-async function request(path,body,token){
- const r=await fetch(URL+path,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
+async function request(path,body,token,method='POST'){
+ const r=await fetch(URL+path,{method,headers:{apikey:KEY,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
  const data=await r.json();if(!r.ok)throw new Error(data.message||data.msg||data.error_description||data.error||'Request failed');return data;
 }
 let refreshing;
@@ -34,7 +34,7 @@ function render(){
  if(page==='competitions'){
  $('#app').innerHTML='<section class="hero"><p class="eyebrow">Competition lobby</p><h1>Find your next challenge</h1><p class="muted">Welcome, '+e(profile?.display_name||profile?.username||'trader')+'. Each competition has an independent balance and portfolio.</p></section><div class="grid">'+(home.competitions||[]).map(c=>'<article class="card"><div class="row between"><span class="badge">'+e(status(c))+'</span><small>'+e(c.max_participants)+' places</small></div><h2>'+e(c.name)+'</h2><p class="muted">'+e(c.description)+'</p><div><small>Starting balance</small><h2>'+money(c.starting_balance)+'</h2></div><small>'+e(date(c.starts_at))+' → '+e(date(c.ends_at))+'</small><div class="row"><button class="primary" data-action="open" data-id="'+e(c.id)+'">Open arena</button>'+((home.memberships||[]).some(m=>m.competition_id===c.id)?'<span class="positive">Joined</span>':'<button data-action="join" data-id="'+e(c.id)+'">Join competition</button>')+'</div></article>').join('')+'</div>'+(!(home.competitions||[]).length?'<div class="panel empty">No competitions published yet. An admin can create the first competition.</div>':'');return}
  if(page==='profile'){
- $('#app').innerHTML='<p class="eyebrow">Your account</p><h1>Trader profile</h1><div class="grid"><section class="panel"><h2>'+e(profile?.username)+'</h2><p>'+e(session.user?.email)+'</p><form id="profileForm"><label>Display name<input name="display_name" maxlength="60" required value="'+e(profile?.display_name)+'"></label><button class="primary">Save profile</button></form></section><section class="panel"><h2>Competition history</h2>'+table(['Competition','Joined',''],(home.memberships||[]).map(m=>[e((home.competitions||[]).find(c=>c.id===m.competition_id)?.name||m.competition_id),e(date(m.joined_at)),'<button data-action="open" data-id="'+e(m.competition_id)+'">View history</button>']))+'</section></div>';return}
+ $('#app').innerHTML='<p class="eyebrow">Your account</p><h1>Trader profile</h1><div class="grid"><section class="panel"><h2>'+e(profile?.username)+'</h2><p>'+e(session.user?.email)+'</p><form id="profileForm"><label>Display name<input name="display_name" maxlength="60" required value="'+e(profile?.display_name)+'"></label><button class="primary">Save profile</button></form><button type="button" data-action="changePassword">Change password</button></section><section class="panel"><h2>Competition history</h2>'+table(['Competition','Joined',''],(home.memberships||[]).map(m=>[e((home.competitions||[]).find(c=>c.id===m.competition_id)?.name||m.competition_id),e(date(m.joined_at)),'<button data-action="open" data-id="'+e(m.competition_id)+'">View history</button>']))+'</section></div>';return}
  if(page==='admin'){renderAdmin();return}
  $('#app').innerHTML='<div class="row between"><div><p class="eyebrow">Competition workspace</p><h1>'+e(page==='leaderboard'?'Leaderboard':'Trading terminal')+'</h1></div><div>'+competitionPicker()+'</div></div>';
  if(!cid||!snap.competition){$('#app').innerHTML+='<div class="panel empty">Select a competition to continue.</div>';return}
@@ -124,6 +124,7 @@ $('#authForm').onsubmit=ev=>{ev.preventDefault();run(async()=>{
  finally{$('#authSubmit').disabled=false}
  })};
 $('#app').addEventListener('click',ev=>{const b=ev.target.closest('[data-action]');if(!b)return;const a=b.dataset.action;
+ if(a==='changePassword')return showPassword('change');
  if(a==='login')return $('#authDialog').showModal();
  if(a==='tab')return renderTradeTable(b.dataset.tab);
  if(a==='refresh')return run(()=>refresh(false));
@@ -180,5 +181,64 @@ setInterval(()=>{if(session&&!loading&&!document.hidden&&navigator.onLine&&Date.
 addEventListener('online',()=>{liveFeed.reconnect();if(session)void refresh(false)});
 addEventListener('offline',()=>{if($('#feedStatus'))$('#feedStatus').textContent='Offline'});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&session){liveFeed.reconnect();void refresh(false)}});
+let passwordMode, recoveryToken;
+function showPassword(mode){
+ passwordMode=mode;
+ const form=$('#passwordForm');
+ form.reset();
+ const reset=mode==='email';
+ for(const [id,visible] of [['resetEmail',reset],['currentPassword',mode==='change'],
+  ['newPassword',!reset],['confirmPassword',!reset]]){
+  const label=$('#'+id),input=label.querySelector('input');
+  label.hidden=!visible;
+  input.disabled=!visible;
+  input.required=visible;
+ }
+ $('#passwordTitle').textContent=reset?'Reset password':mode==='change'?'Change password':'Set a new password';
+ $('#passwordSubmit').textContent=reset?'Send reset link':'Save password';
+ $('#passwordStatus').textContent='';
+ if(reset)form.elements.email.value=$('#authForm').elements.email.value;
+ $('#authDialog').close();
+ $('#passwordDialog').showModal();
+}
+$('#forgotPassword').onclick=()=>showPassword('email');
+$('#passwordClose').onclick=()=>$('#passwordDialog').close();
+$('#passwordDialog').addEventListener('close',()=>{recoveryToken=null;$('#passwordForm').reset()});
+$('#passwordForm').onsubmit=async event=>{
+ event.preventDefault();
+ const form=event.currentTarget, data=Object.fromEntries(new FormData(form));
+ const submit=$('#passwordSubmit'), status=$('#passwordStatus'), mode=passwordMode;
+ submit.disabled=true;
+ status.textContent='';
+ try{
+  if(mode==='email'){
+   await request('/auth/v1/recover?redirect_to='+encodeURIComponent(location.origin+'/'),{email:data.email});
+   status.textContent='If the account exists, check your email for the reset link.';
+   return;
+  }
+  if(data.password!==data.confirm)throw new Error('The new passwords do not match.');
+  let token=recoveryToken;
+  if(mode==='change'){
+   const auth=await request('/auth/v1/token?grant_type=password',{email:session.user.email,password:data.current});
+   token=auth.access_token;
+  }
+  if(!token)throw new Error('Request a new password reset link.');
+  await request('/auth/v1/user',{password:data.password},token,'PUT');
+  saveSession(null);
+  $('#passwordDialog').close();
+  render();
+  notice('Password saved. Sign in with your new password.');
+ }catch(error){status.textContent=error.message}
+ finally{submit.disabled=false}
+};
+const callback=new URLSearchParams(location.hash.slice(1));
+if(callback.get('type')==='recovery'&&callback.has('access_token')){
+ recoveryToken=callback.get('access_token');
+ history.replaceState(null,'',location.pathname);
+ showPassword('recovery');
+}else if(callback.has('error_code')){
+ history.replaceState(null,'',location.pathname);
+ notice('This sign-in link is invalid or expired. Request a new link.',true);
+}
 render();if(session)refresh();
 
