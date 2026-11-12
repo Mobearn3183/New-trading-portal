@@ -29,13 +29,33 @@ export function drawChart(canvas,trades,opts={},drawings=[]){
  if(opts.type==='line'){ctx.beginPath();ctx.strokeStyle='#4cdeb2';bars.forEach((b,i)=>i?ctx.lineTo(x(i),y(b.close)):ctx.moveTo(x(i),y(b.close)));ctx.stroke()}
  else bars.forEach((b,i)=>{ctx.fillStyle=ctx.strokeStyle=b.close>=b.open?'#43dcb0':'#f27b90';ctx.beginPath();ctx.moveTo(x(i),y(b.high));ctx.lineTo(x(i),y(b.low));ctx.stroke();ctx.fillRect(x(i)-bw*.3,Math.min(y(b.open),y(b.close)),Math.max(1,bw*.6),Math.max(1,Math.abs(y(b.open)-y(b.close))))});
  if(opts.ma){const a=sma(bars);ctx.strokeStyle='#f1c874';ctx.beginPath();let started=false;a.forEach((p,i)=>{if(p===null)return;if(started)ctx.lineTo(x(i),y(p));else{ctx.moveTo(x(i),y(p));started=true}});ctx.stroke()}
+ const sides=bars.map(()=>({buy:0,sell:0}));
+ const indices=new Map(bars.map((bar,index)=>[bar.time,index]));
+ const interval=Number(opts.interval)||60;
+ for(const trade of trades){
+  const bucket=Math.floor(Date.parse(trade.created_at)/1000/interval)*interval;
+  const index=indices.get(bucket);
+  if(index!==undefined && ['buy','sell'].includes(trade.taker_side)){
+   sides[index][trade.taker_side]+=Number(trade.quantity);
+  }
+ }
  const vmax=Math.max(...bars.map(b=>b.volume))||1;
- bars.forEach((b,i)=>{ctx.fillStyle=b.close>=b.open?'#43dcb055':'#f27b9055';ctx.fillRect(x(i)-bw*.3,vbottom-b.volume/vmax*40,bw*.6,b.volume/vmax*40)});
+ sides.forEach(({buy,sell},i)=>{
+  const buyHeight=buy/vmax*40,sellHeight=sell/vmax*40;
+  ctx.fillStyle='#43dcb0';
+  ctx.fillRect(x(i)-bw*.3,vbottom-buyHeight,bw*.6,buyHeight);
+  ctx.fillStyle='#f27b90';
+  ctx.fillRect(x(i)-bw*.3,vbottom-buyHeight-sellHeight,bw*.6,sellHeight);
+ });
  if(opts.rsi){const a=rsi(bars),ry=p=>h-15-p/100*45;ctx.fillStyle='#93a5bd';ctx.fillText('RSI 14',left,h-60);ctx.strokeStyle='#b49cf7';ctx.beginPath();let started=false;a.forEach((p,i)=>{if(p===null)return;if(started)ctx.lineTo(x(i),ry(p));else{ctx.moveTo(x(i),ry(p));started=true}});ctx.stroke()}
  ctx.fillStyle='#93a5bd';ctx.fillText(new Date(bars[0].time*1000).toLocaleTimeString(),left,h-3);ctx.fillText(new Date(bars.at(-1).time*1000).toLocaleTimeString(),Math.max(left,right-75),h-3);
  const tx=t=>left+((t-bars[0].time)/(Number(opts.interval)||60)+.5)*bw;
  ctx.strokeStyle='#86aef7';
  for(const d of drawings){ctx.beginPath();if(d.kind==='horizontal'){ctx.moveTo(left,y(d.price));ctx.lineTo(right,y(d.price))}else{ctx.moveTo(tx(d.start.time),y(d.start.price));ctx.lineTo(tx(d.end.time),y(d.end.price))}ctx.stroke()}
- return {point:(cx,cy)=>({time:bars[0].time+(cx-left)/bw*(Number(opts.interval)||60),price:lo+(bottom-cy)/(bottom-top)*(hi-lo)})};
+ return {barAt:cx=>{
+  if(cx<left||cx>=right)return null;
+  const index=Math.floor((cx-left)/bw);
+  return {...bars[index],...sides[index]};
+ },point:(cx,cy)=>({time:bars[0].time+(cx-left)/bw*(Number(opts.interval)||60),price:lo+(bottom-cy)/(bottom-top)*(hi-lo)})};
 }
 
