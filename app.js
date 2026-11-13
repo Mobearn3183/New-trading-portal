@@ -163,7 +163,7 @@ $('#app').addEventListener('pointerdown',ev=>{if(ev.target.id!=='chart'||!geomet
   const [buyers,sellers]=snap.candle_accounts?.[chartOptions.interval]?.[bar.time]??['—','—'];
   const format=value=>value.toLocaleString(undefined,{maximumFractionDigits:4});
   $('#chartHint').textContent=new Date(bar.time*1000).toLocaleTimeString()+
-   ' · Buy volume '+format(bar.buy)+' · Sell volume '+format(bar.sell)+' · Total '+format(bar.volume)+
+   ' · Buyer-initiated volume '+format(bar.buy)+' · Seller-initiated volume '+format(bar.sell)+' · Total traded '+format(bar.volume)+
    ' · Buying accounts '+buyers+' · Selling accounts '+sellers;
   return;
  }
