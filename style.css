@@ -2,6 +2,4 @@
 
 .quotes{display:flex;gap:32px;margin-bottom:16px}.quotes strong{display:block;font-size:21px}.compact{padding:3px 10px}#feedStatus{color:#48dbb1}.tabs button.active{border-color:#42d9ad;color:#42d9ad}@media(max-width:600px){.quotes{gap:16px;flex-wrap:wrap}.quotes strong{font-size:18px}}
 
-.candle-volume:not([hidden]){display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;padding-top:1rem}
-.account-pie{width:110px;aspect-ratio:1;border-radius:50%}
-.candle-volume ol{max-height:12rem;overflow:auto;padding-left:1.4rem}
+.candle-volume{overflow-x:auto}
